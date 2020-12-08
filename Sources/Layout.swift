@@ -60,20 +60,18 @@ struct LayoutSegment {
 }
 
 class LayoutAdapter {
-    weak var vc: FloatingPanelController!
+    weak var vc: FloatingPanelController?
     private let defaultLayout = FloatingPanelBottomLayout()
 
     fileprivate var layout: FloatingPanelLayout {
-        didSet {
-            surfaceView.position = position
-        }
+        didSet { surfaceView?.position = position }
     }
 
-    private var surfaceView: SurfaceView {
-        return vc.surfaceView
+    private var surfaceView: SurfaceView? {
+        return vc?.surfaceView
     }
-    private var backdropView: BackdropView {
-        return vc.backdropView
+    private var backdropView: BackdropView? {
+        return vc?.backdropView
     }
     private var safeAreaInsets: UIEdgeInsets {
         return vc?.fp_safeAreaInsets ?? .zero
@@ -224,7 +222,11 @@ class LayoutAdapter {
                     }
                 }
             } else {
-                pos = displayTrunc(edgePosition(surfaceView.frame), by: surfaceView.fp_displayScale)
+                if let surfaceView = surfaceView {
+                    pos = displayTrunc(edgePosition(surfaceView.frame), by: surfaceView.fp_displayScale)
+                } else {
+                    pos = .zero
+                }
             }
             switch position {
             case .top, .bottom:
@@ -252,21 +254,24 @@ class LayoutAdapter {
                     }
                 }
             } else {
-                switch position {
-                case .top:
-                    return surfaceView.frame.origin.y = pos - surfaceView.bounds.height
-                case .left:
-                    return surfaceView.frame.origin.x = pos - surfaceView.bounds.width
-                case .bottom:
-                    return surfaceView.frame.origin.y = pos
-                case .right:
-                    return surfaceView.frame.origin.x = pos
+                if let surfaceView = surfaceView {
+                    switch position {
+                    case .top:
+                        return surfaceView.frame.origin.y = pos - surfaceView.bounds.height
+                    case .left:
+                        return surfaceView.frame.origin.x = pos - surfaceView.bounds.width
+                    case .bottom:
+                        return surfaceView.frame.origin.y = pos
+                    case .right:
+                        return surfaceView.frame.origin.x = pos
+                    }
                 }
             }
         }
     }
 
     var offsetFromEdgeMost: CGFloat {
+        guard let surfaceView = surfaceView else { return .zero }
         switch position {
         case .top, .left:
             return edgePosition(surfaceView.presentationFrame) - position(for: directionalMostState)
@@ -294,6 +299,7 @@ class LayoutAdapter {
     }
 
     func surfaceLocation(for state: FloatingPanelState) -> CGPoint {
+        guard let surfaceView = surfaceView else { return .zero }
         let pos = displayTrunc(position(for: state), by: surfaceView.fp_displayScale)
         switch layout.position {
         case .top, .bottom:
@@ -304,6 +310,8 @@ class LayoutAdapter {
     }
 
     func position(for state: FloatingPanelState) -> CGFloat {
+        guard let vc = vc, let surfaceView = surfaceView else { return .zero }
+        
         let bounds = vc.view.bounds
         let anchor = layout.anchors[state] ?? self.hiddenAnchor
 
@@ -395,6 +403,11 @@ class LayoutAdapter {
     }
 
     func prepareLayout() {
+        guard
+            let vc = vc,
+            let surfaceView = surfaceView,
+            let backdropView = backdropView
+        else { return }
         NSLayoutConstraint.deactivate(fixedConstraints)
 
         surfaceView.translatesAutoresizingMaskIntoConstraints = false
@@ -452,6 +465,7 @@ class LayoutAdapter {
     }
 
     private func updateStateConstraints() {
+        guard let vc = vc else { return }
         NSLayoutConstraint.deactivate(fullConstraints + halfConstraints + tipConstraints + offConstraints)
 
         if let fullAnchor = layout.anchors[.full] {
@@ -480,6 +494,7 @@ class LayoutAdapter {
     }
 
     func startInteraction(at state: FloatingPanelState, offset: CGPoint = .zero) {
+        guard let vc = vc, let surfaceView = surfaceView else { return }
         if let constraint = interactionConstraint {
             initialConst = constraint.constant
             return
@@ -522,7 +537,8 @@ class LayoutAdapter {
         }
     }
 
-    func setUpAttraction(to state: FloatingPanelState) -> (NSLayoutConstraint, CGFloat) {
+    func setUpAttraction(to state: FloatingPanelState) -> (NSLayoutConstraint, CGFloat)? {
+        guard let vc = vc, let surfaceView = surfaceView else { return nil }
         NSLayoutConstraint.deactivate(constraint: attractionConstraint)
 
         let anchor = layout.anchors[state] ?? self.hiddenAnchor
@@ -646,7 +662,7 @@ class LayoutAdapter {
     // The method is separated from prepareLayout(to:) for the rotation support
     // It must be called in FloatingPanelController.traitCollectionDidChange(_:)
     func updateStaticConstraint() {
-        guard let vc = vc else { return }
+        guard let vc = vc, let surfaceView = surfaceView else { return }
         NSLayoutConstraint.deactivate(constraint: staticConstraint)
         staticConstraint = nil
 
@@ -697,6 +713,7 @@ class LayoutAdapter {
     }
 
     func updateInteractiveEdgeConstraint(diff: CGFloat, overflow: Bool, allowsRubberBanding: (UIRectEdge) -> Bool) {
+        guard let vc = vc else { return }
         defer {
             log.debug("update surface location = \(surfaceLocation)")
         }
@@ -735,10 +752,11 @@ class LayoutAdapter {
     }
 
     func activateLayout(for state: FloatingPanelState, forceLayout: Bool = false) {
+        guard let vc = vc, let surfaceView = surfaceView else { return }
         defer {
             if forceLayout {
                 layoutSurfaceIfNeeded()
-                log.debug("activateLayout for \(state) -- surface.presentation = \(self.surfaceView.presentationFrame) surface.frame = \(self.surfaceView.frame)")
+                log.debug("activateLayout for \(state) -- surface.presentation = \(surfaceView.presentationFrame) surface.frame = \(surfaceView.frame)")
             } else {
                 log.debug("activateLayout for \(state)")
             }
@@ -785,16 +803,16 @@ class LayoutAdapter {
 
     private func layoutSurfaceIfNeeded() {
         #if !TEST
-        guard surfaceView.window != nil else { return }
+        guard surfaceView?.window != nil else { return }
         #endif
-        surfaceView.superview?.layoutIfNeeded()
+        surfaceView?.superview?.layoutIfNeeded()
     }
 
     private func setBackdropAlpha(of target: FloatingPanelState) {
         if target == .hidden {
-            self.backdropView.alpha = 0.0
+            self.backdropView?.alpha = 0.0
         } else {
-            self.backdropView.alpha = backdropAlpha(for: target)
+            self.backdropView?.alpha = backdropAlpha(for: target)
         }
     }
 
