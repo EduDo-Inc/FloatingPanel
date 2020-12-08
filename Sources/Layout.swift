@@ -190,7 +190,7 @@ class LayoutAdapter {
             var pos: CGFloat
             if let constraint = interactionConstraint {
                 pos = constraint.constant
-            } else if let animationConstraint = attractionConstraint, let anchor = layout.anchors[vc.state] {
+            } else if let animationConstraint = attractionConstraint, let vc = vc, let anchor = layout.anchors[vc.state] {
                 switch position {
                 case .top, .bottom:
                     switch referenceEdge(of: anchor) {
@@ -237,7 +237,7 @@ class LayoutAdapter {
             let pos = position.mainLocation(newValue)
             if let constraint = interactionConstraint {
                 constraint.constant = pos
-            } else if let animationConstraint = attractionConstraint, let anchor = layout.anchors[vc.state] {
+            } else if let animationConstraint = attractionConstraint, let vc = vc, let anchor = layout.anchors[vc.state] {
                 let refEdge = referenceEdge(of: anchor)
                 switch refEdge {
                 case .top, .left:
